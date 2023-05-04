@@ -408,12 +408,8 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "aStarPanel": {
-      "__uuid__": "410ebf6a-ff32-452a-a085-0f9166bbf1e7",
-      "__expectedType__": "cc.Prefab"
-    },
-    "treePanel": {
-      "__uuid__": "37dc6202-1953-4f96-9b46-e8a1e6b448de",
+    "LoadingPanel": {
+      "__uuid__": "a97533dc-3b0d-4b85-a05e-b384a8056c06",
       "__expectedType__": "cc.Prefab"
     },
     "_id": "c1Sw2SxrJECIYxPhihseWc"
