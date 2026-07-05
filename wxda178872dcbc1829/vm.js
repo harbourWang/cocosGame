@@ -171,9 +171,10 @@ rewardedVideoAd.load()
 
 setTimeout(() => {
   try {
-      if (canShowAd() && rewardedVideoAd) {
-          playAdAfterGameLoaded()
-      }
+    require("playad.js")
+    //   if (canShowAd() && rewardedVideoAd) {
+    //       playAdAfterGameLoaded()
+    //   }
   } catch (err) {
       console.error(err)
   }
