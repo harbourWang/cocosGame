@@ -22,6 +22,8 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         bg: "img/adimg/tile_001.png",
         icon: "img/adimg/tile_004.png",
         button: "img/adimg/tile_006.png",
+        barBg: "img/adimg/tile_011.png",
+        barFill: "img/adimg/tile_012.png",
         adUnitId: "adunit-8cf11ddb3cc89440",              // 默认读取 GameGlobal._videoId；需要固定广告位可填这里
         autoShow: true,
         autoShowDelay: 800,
@@ -31,14 +33,49 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         slowNoClickMs: 3000,
         slowMinSpeed: 6,
         slowCheckMs: 4500,
-        completeHideMs: 500,
+        completeHideMs: 0,
         playAdOnComplete: true
     };
+
+    // ================= UI CONFIG START =================
+    // ?????????????
+    // scale??????1 ???????????0.8 ???1.2 ???
+    // x?????????????y?????????????
+    var UI_CONFIG = {
+        scale: 1,
+        offsetX: 0,
+        offsetY: 0,
+        groupHeight: 537,
+        maskAlpha: 0.72,
+        background: { w: 570, h: 260, x: 0, y: -330 },
+        chest: { w: 312, h: 258, x: 0, y: 100},
+        glow: { enabled: true, radiusScale: 0.68, alpha: 0.95, speed: 1.8 },
+        title: { text: "\u72C2\u70B9\u6253\u5F00\u5B9D\u7BB1", x: 0, y: -70, fontSize: 41, color: 0xffffff, bold: true },
+        progress: { w: 470, h: 43, fillH: 40, x: 0, y: 550, nineSlice: { left: 20, top: 12, right: 20, bottom: 12 } },
+        percent: { yOffset: 0, fontSize: 22, color: 0x5a3200, bold: true },
+        button: { w: 322, h: 127, x: 0, y: 620 }
+    };
+    // ================== UI CONFIG END ==================
+
+    function mergeConfig(target, src) {
+        if (!src) return target;
+        for (var k in src) {
+            if (!src.hasOwnProperty(k)) continue;
+            if (src[k] && typeof src[k] === "object" && !Array.isArray(src[k])) {
+                if (!target[k] || typeof target[k] !== "object") target[k] = {};
+                mergeConfig(target[k], src[k]);
+            } else {
+                target[k] = src[k];
+            }
+        }
+        return target;
+    }
 
     var S = {
         inited: false,
         hooked: false,
         visible: false,
+        suspendPanel: false,
         completed: false,
         adShowing: false,
         adPlayed: false,
@@ -47,6 +84,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         lastClickAt: 0,
         lastTickAt: 0,
         lastTapAt: 0,
+        lastGlowAt: 0,
         timer: null,
         autoTimer: null,
         app: null,
@@ -82,10 +120,21 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         var sys;
         try { sys = W && W.getSystemInfoSync ? W.getSystemInfoSync() : null; } catch (e) {}
         var dpr = getDpr();
+        var winW = ((sys && sys.windowWidth) || 375) * dpr;
+        var winH = ((sys && sys.windowHeight) || 667) * dpr;
+        var canvasW = 0, canvasH = 0;
+        try {
+            var c = (typeof canvas !== "undefined" && canvas) || G.canvas || (app && app.view);
+            canvasW = (c && (c.width || c.clientWidth * dpr)) || 0;
+            canvasH = (c && (c.height || c.clientHeight * dpr)) || 0;
+        } catch (e) {}
+        var rendererW = app && (app.gameWidth || app.width || app.screen && app.screen.width || app.view && app.view.width) || 0;
+        var rendererH = app && (app.gameHeight || app.height || app.screen && app.screen.height || app.view && app.view.height) || 0;
         return {
             dpr: dpr,
-            w: app && app.gameWidth || app && app.renderer && app.renderer.width || ((sys && sys.windowWidth) || 375) * dpr,
-            h: app && app.gameHeight || app && app.renderer && app.renderer.height || ((sys && sys.windowHeight) || 667) * dpr,
+            // ?????????????????????????? canvas?
+            w: Math.max(rendererW, canvasW, winW),
+            h: Math.max(rendererH, canvasH, winH),
             sw: (sys && sys.windowWidth) || 375,
             sh: (sys && sys.windowHeight) || 667
         };
@@ -101,6 +150,28 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
             console.error("[playad] 图片创建失败", path, e);
         }
         return null;
+    }
+
+    function makeTexture(path) {
+        try {
+            if (PIXI.Texture && PIXI.Texture.from) return PIXI.Texture.from(path);
+            if (PIXI.Texture && PIXI.Texture.fromImage) return PIXI.Texture.fromImage(path);
+        } catch (e) {
+            console.error("[playad] texture create failed", path, e);
+        }
+        return null;
+    }
+
+    function makeNineSlice(path, left, top, right, bottom) {
+        var tex = makeTexture(path);
+        if (!tex) return makeSprite(path);
+        try {
+            if (PIXI.NineSlicePlane) return new PIXI.NineSlicePlane(tex, left, top, right, bottom);
+            if (PIXI.mesh && PIXI.mesh.NineSlicePlane) return new PIXI.mesh.NineSlicePlane(tex, left, top, right, bottom);
+        } catch (e) {
+            console.error("[playad] nine-slice create failed", path, e);
+        }
+        return new PIXI.Sprite(tex);
     }
 
     function makeText(text, size, color, bold) {
@@ -123,9 +194,16 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
     function setText(t, v) { if (t) t.text = v; }
 
     function drawProgress() {
-        if (!S.ui.fill || !S.ui.percent) return;
-        var bw = S.rect.bw, bh = S.rect.bh;
-        rr(S.ui.fill, 0xffd54a, 1, 0, 0, bw * S.progress / CFG.max, bh, bh / 2);
+        if (!S.ui.fill || !S.ui.percent || !S.rect) return;
+        var bw = S.rect.bw;
+        var fw = Math.max(0, bw * S.progress / CFG.max);
+        if (S.ui.fillIsImage) {
+            S.ui.fill.visible = fw > 1;
+            S.ui.fill.width = Math.max(1, fw);
+            S.ui.fill.height = S.rect.fillH || S.rect.bh;
+        } else {
+            rr(S.ui.fill, 0xffd54a, 1, 0, 0, fw, S.rect.bh, S.rect.bh / 2);
+        }
         S.ui.percent.text = Math.floor(S.progress) + "%";
         S.ui.percent.x = S.rect.barX + bw / 2 - S.ui.percent.width / 2;
     }
@@ -136,6 +214,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
     }
 
     function ensurePanel() {
+        if (S.suspendPanel && !S.visible) return false;
         var app = getApp();
         if (!app) return false;
 
@@ -158,27 +237,111 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         return true;
     }
 
+    function createGlow(radius) {
+        var c = new PIXI.Container();
+        c.name = "playad_chest_glow";
+        c.alpha = 0.95;
+
+        var circle1 = new PIXI.Graphics();
+        circle1.beginFill(0xfff1a6, 0.20);
+        circle1.drawCircle(0, 0, radius * 0.62);
+        circle1.endFill();
+        c.addChild(circle1);
+
+        var circle2 = new PIXI.Graphics();
+        circle2.beginFill(0xffffff, 0.16);
+        circle2.drawCircle(0, 0, radius * 0.38);
+        circle2.endFill();
+        c.addChild(circle2);
+
+        for (var i = 0; i < 16; i++) {
+            var ray = new PIXI.Graphics();
+            var longRay = i % 2 === 0;
+            var inner = radius * (longRay ? 0.26 : 0.22);
+            var outer = radius * (longRay ? 1.05 : 0.82);
+            var half = radius * (longRay ? 0.085 : 0.06);
+            ray.beginFill(0xfff6b8, longRay ? 0.42 : 0.28);
+            ray.moveTo(0, -inner);
+            ray.lineTo(half, -outer);
+            ray.lineTo(0, -outer * 1.12);
+            ray.lineTo(-half, -outer);
+            ray.lineTo(0, -inner);
+            ray.endFill();
+            ray.rotation = Math.PI * 2 * i / 16;
+            c.addChild(ray);
+        }
+        return c;
+    }
+
+    function updateGlow() {
+        if (!S.ui.glow || !S.visible) return;
+        var t = now();
+        if (!S.lastGlowAt) S.lastGlowAt = t;
+        var dt = Math.min(0.08, Math.max(0, (t - S.lastGlowAt) / 1000));
+        S.lastGlowAt = t;
+        S.ui.glow.rotation += dt * ((UI_CONFIG.glow && UI_CONFIG.glow.speed) || 1.8);
+    }
+
     function createPanel(app) {
         var size = getSize(app);
         var w = size.w, h = size.h;
-        var pw = Math.min(w * 0.88, 650);
-        var ph = Math.max(260, pw * 345 / 814);
-        var px = (w - pw) / 2;
-        var py = h * 0.52 - ph / 2;
+        var C = UI_CONFIG;
+        var sc = Number(C.scale) || 1;
+        let temp = size.h / size.w
+        if(temp > 667/375) {
+            // sc = (temp - 1) * 0.5 + 1
+            sc = temp
+            // sc = 1.5
+            console.error("sc",sc)
+        }
+        console.error("sc",size)
+        if (sc <= 0) sc = 1;
+        function u(v) { return (Number(v) || 0) * sc; }
+
+        var centerX = w / 2 + u(C.offsetX);
+        var groupH = u(C.groupHeight || 537);
+        var groupTop = Math.max(20, (h - groupH) / 2) + u(C.offsetY);
+
+        var bgCfg = C.background || {};
+        var chestCfg = C.chest || {};
+        var progCfg = C.progress || {};
+        var btnCfg = C.button || {};
+
+        var pw = u(bgCfg.w || 570);
+        var ph = u(bgCfg.h || 260);
+        var px = centerX + u(bgCfg.x) - pw / 2;
+        var py = groupTop + u(bgCfg.y);
+
+        var iconW = u(chestCfg.w || 312);
+        var iconH = u(chestCfg.h || 258);
+        var iconX = centerX + u(chestCfg.x) - iconW / 2;
+        var iconY = groupTop + u(chestCfg.y);
+
+        var barW = u(progCfg.w || 470);
+        var barH = u(progCfg.h || 43);
+        var fillH = u(progCfg.fillH || 40);
+        var barX = centerX + u(progCfg.x) - barW / 2;
+        var barY = groupTop + u(progCfg.y || 342);
+
+        var btnW = u(btnCfg.w || 322);
+        var btnH = u(btnCfg.h || 127);
+        var btnX = centerX + u(btnCfg.x) - btnW / 2;
+        var btnY = groupTop + u(btnCfg.y || 406);
 
         S.rect = {
             x: px,
             y: py,
             w: pw,
             h: ph,
-            btnX: px + pw * 0.64 - pw * 0.42 / 2,
-            btnY: py + ph * 0.78 - (pw * 0.42 * 137 / 405) / 2,
-            btnW: pw * 0.42,
-            btnH: pw * 0.42 * 137 / 405,
-            barX: pw * 0.32,
-            barY: ph * 0.47,
-            bw: pw * 0.62,
-            bh: 24,
+            btnX: btnX,
+            btnY: btnY,
+            btnW: btnW,
+            btnH: btnH,
+            barX: barX,
+            barY: barY,
+            bw: barW,
+            bh: barH,
+            fillH: fillH,
             dpr: size.dpr
         };
 
@@ -186,90 +349,115 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         p.name = "playad_panel";
         p.visible = false;
         p.interactive = false;
-        p.x = px;
-        p.y = py;
+        p.x = 0;
+        p.y = 0;
 
-        // 全屏背景蒙版：panel 本身放在面板位置(px, py)，所以蒙版用负坐标铺满整个游戏画布
         var mask = new PIXI.Graphics();
-        mask.beginFill(0x000000, 0.65);
-        mask.drawRect(-px, -py, w, h);
+        mask.beginFill(0x000000, C.maskAlpha == null ? 0.72 : C.maskAlpha);
+        mask.drawRect(-w, -h, w * 3, h * 3);
+        mask.drawRect(0, 0, w, h);
         mask.endFill();
         p.addChild(mask);
 
-        // 兜底阴影/底板：即使图片没加载，也一定能看到面板
         var shadow = new PIXI.Graphics();
-        rr(shadow, 0x000000, 0.28, -10, -10, pw + 20, ph + 20, 26);
+        rr(shadow, 0x000000, 0.30, px - u(14), py - u(14), pw + u(28), ph + u(28), u(30));
         p.addChild(shadow);
 
         var bg = makeSprite(CFG.bg);
         if (bg) {
+            bg.x = px;
+            bg.y = py;
             bg.width = pw;
             bg.height = ph;
             p.addChild(bg);
         } else {
             var bg2 = new PIXI.Graphics();
-            rr(bg2, 0x2d8cff, 1, 0, 0, pw, ph, 24);
+            rr(bg2, 0x2d8cff, 1, px, py, pw, ph, u(26));
             p.addChild(bg2);
+        }
+
+        var glow = null;
+        if (!C.glow || C.glow.enabled !== false) {
+            glow = createGlow(Math.max(iconW, iconH) * ((C.glow && C.glow.radiusScale) || 0.68));
+            glow.alpha = C.glow && C.glow.alpha == null ? 0.95 : (C.glow && C.glow.alpha);
+            glow.x = iconX + iconW / 2;
+            glow.y = iconY + iconH / 2;
+            p.addChild(glow);
         }
 
         var icon = makeSprite(CFG.icon);
         if (icon) {
-            icon.width = pw * 0.23;
-            icon.height = icon.width * 277 / 330;
-            icon.x = pw * 0.06;
-            icon.y = ph * 0.18;
+            icon.width = iconW;
+            icon.height = iconH;
+            icon.x = iconX;
+            icon.y = iconY;
             p.addChild(icon);
         }
 
-        var title = makeText("点击加速", Math.max(30, pw * 0.055), 0xffffff, true);
-        title.x = pw * 0.36;
-        title.y = ph * 0.13;
+        var titleCfg = C.title || {};
+        var title = makeText(titleCfg.text || "\u70b9\u51fb\u52a0\u901f", u(titleCfg.fontSize || 41), titleCfg.color == null ? 0xffffff : titleCfg.color, titleCfg.bold !== false);
+        title.x = centerX + u(titleCfg.x) - title.width / 2;
+        title.y = groupTop + u(titleCfg.y || 244);
         p.addChild(title);
 
-        var tip = makeText("连续点击按钮增加进度", Math.max(20, pw * 0.032), 0xffffff, false);
-        tip.x = pw * 0.36;
-        tip.y = ph * 0.30;
-        p.addChild(tip);
 
-        var barBg = new PIXI.Graphics();
-        rr(barBg, 0x1b1b1b, 0.75, 0, 0, S.rect.bw, S.rect.bh, S.rect.bh / 2);
-        barBg.x = S.rect.barX;
-        barBg.y = S.rect.barY;
-        p.addChild(barBg);
+        var barBg = makeSprite(CFG.barBg);
+        if (barBg) {
+            barBg.x = S.rect.barX;
+            barBg.y = S.rect.barY;
+            barBg.width = barW;
+            barBg.height = barH;
+            p.addChild(barBg);
+        } else {
+            barBg = new PIXI.Graphics();
+            rr(barBg, 0x1b1b1b, 0.78, 0, 0, S.rect.bw, S.rect.bh, S.rect.bh / 2);
+            barBg.x = S.rect.barX;
+            barBg.y = S.rect.barY;
+            p.addChild(barBg);
+        }
 
-        var fill = new PIXI.Graphics();
-        fill.x = S.rect.barX;
-        fill.y = S.rect.barY;
-        p.addChild(fill);
+        var ns = progCfg.nineSlice || {};
+        var fill = makeNineSlice(CFG.barFill, u(ns.left || 20), u(ns.top || 12), u(ns.right || 20), u(ns.bottom || 12));
+        if (fill) {
+            fill.x = S.rect.barX;
+            fill.y = S.rect.barY + Math.round((S.rect.bh - S.rect.fillH) / 2);
+            fill.width = 1;
+            fill.height = S.rect.fillH;
+            p.addChild(fill);
+            S.ui.fillIsImage = true;
+        } else {
+            fill = new PIXI.Graphics();
+            fill.x = S.rect.barX;
+            fill.y = S.rect.barY;
+            p.addChild(fill);
+            S.ui.fillIsImage = false;
+        }
 
-        var percent = makeText("0%", Math.max(16, pw * 0.028), 0x5a3200, true);
-        percent.y = S.rect.barY + S.rect.bh / 2 - percent.height / 2;
+        var percentCfg = C.percent || {};
+        var percent = makeText("0%", u(percentCfg.fontSize || 22), percentCfg.color == null ? 0x5a3200 : percentCfg.color, percentCfg.bold !== false);
+        percent.y = S.rect.barY + S.rect.bh / 2 - percent.height / 2 + u(percentCfg.yOffset);
         p.addChild(percent);
 
         var btn = makeSprite(CFG.button);
         if (btn) {
-            btn.width = S.rect.btnW;
-            btn.height = S.rect.btnH;
-            btn.x = pw * 0.64 - S.rect.btnW / 2;
-            btn.y = ph * 0.78 - S.rect.btnH / 2;
+            btn.width = btnW;
+            btn.height = btnH;
+            btn.x = S.rect.btnX;
+            btn.y = S.rect.btnY;
             p.addChild(btn);
         } else {
             var btn2 = new PIXI.Graphics();
-            rr(btn2, 0xff7a00, 1, pw * 0.64 - S.rect.btnW / 2, ph * 0.78 - S.rect.btnH / 2, S.rect.btnW, S.rect.btnH, 20);
+            rr(btn2, 0xff7a00, 1, S.rect.btnX, S.rect.btnY, S.rect.btnW, S.rect.btnH, u(22));
             p.addChild(btn2);
         }
 
-        var btnText = makeText("点 击", Math.max(26, pw * 0.045), 0xffffff, true);
-        btnText.x = pw * 0.64 - btnText.width / 2;
-        btnText.y = ph * 0.78 - btnText.height / 2;
-        p.addChild(btnText);
 
         S.panel = p;
         S.ui.mask = mask;
-        S.ui.tip = tip;
+        S.ui.glow = glow;
+        S.ui.barBg = barBg;
         S.ui.fill = fill;
         S.ui.percent = percent;
-        S.ui.btnText = btnText;
         setProgress(0);
     }
 
@@ -279,6 +467,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         var old = app.renderStage;
         app.renderStage = function () {
             ensurePanel();
+            updateGlow();
             return old.apply(this, arguments);
         };
         app.__playadHooked = true;
@@ -313,12 +502,12 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         if (S.progress >= CFG.max) {
             onProgressFull("complete");
         } else {
-            setText(S.ui.tip, "\u7ee7\u7eed\u70b9\u51fb\uff0c\u8fdb\u5ea6\u6ee1\u5373\u53ef\u5f00\u59cb");
         }
         renderOnce();
     }
 
     function renderOnce() {
+        updateGlow();
         try { if (S.app && S.app.renderStage) S.app.renderStage(); } catch (e) {}
     }
 
@@ -330,11 +519,11 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         S.firstClickAt = 0;
         S.lastClickAt = 0;
         S.lastTickAt = now();
-        setText(S.ui.tip, "连续点击按钮增加进度");
         setProgress(0);
     }
 
     function show() {
+        S.suspendPanel = false;
         if (!ensurePanel()) {
             log("show failed: renderer not ready");
             return false;
@@ -351,8 +540,24 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
 
     function hide() {
         S.visible = false;
+        S.lastGlowAt = 0;
         if (S.panel) S.panel.visible = false;
         stopTick();
+        renderOnce();
+    }
+
+    function destroyPanelForAd() {
+        S.visible = false;
+        S.suspendPanel = true;
+        S.lastGlowAt = 0;
+        stopTick();
+        if (S.panel && S.panel.parent && S.panel.parent.removeChild) {
+            try { S.panel.parent.removeChild(S.panel); } catch (e) {}
+        }
+        try { S.panel && S.panel.destroy && S.panel.destroy({ children: true }); } catch (e) {}
+        S.panel = null;
+        S.ui = {};
+        S.rect = null;
         renderOnce();
     }
 
@@ -371,7 +576,6 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
                 var elapsed = t - S.firstClickAt;
                 var speed = elapsed > 0 ? S.progress / (elapsed / 1000) : 999;
                 if (inactive >= CFG.slowNoClickMs || (elapsed >= CFG.slowCheckMs && speed < CFG.slowMinSpeed)) {
-                    setText(S.ui.tip, "进度太慢，准备播放广告");
                     playAd("slow");
                 }
             }
@@ -388,7 +592,6 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         if (S.completed || S.adShowing) return;
         setProgress(CFG.max);
         if (CFG.playAdOnComplete !== false && !S.adPlayed) {
-            setText(S.ui.tip, "\u8fdb\u5ea6\u5df2\u6ee1\uff0c\u51c6\u5907\u64ad\u653e\u5e7f\u544a");
             renderOnce();
             playAd(reason || "complete");
             return;
@@ -399,7 +602,6 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
     function complete() {
         if (S.completed) return;
         S.completed = true;
-        setText(S.ui.tip, "\u5b8c\u6210\uff01");
         setTimeout(hide, CFG.completeHideMs);
     }
 
@@ -427,6 +629,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
     function playAd(reason) {
         if (S.adShowing || S.adPlayed || S.completed) return;
         S.adPlayed = true;
+        destroyPanelForAd();
         var ad = getAd();
         if (!ad) {
             log("no ad, skip", reason);
@@ -438,13 +641,8 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         var close = function (res) {
             S.adShowing = false;
             if (ad.offClose) ad.offClose(close);
-            if (!res || res.isEnded) {
-                setProgress(CFG.max);
-                complete();
-            } else {
-                S.lastClickAt = now();
-                setText(S.ui.tip, "继续点击，进度满即可开始");
-            }
+            setProgress(CFG.max);
+            complete();
             renderOnce();
         };
         ad.onClose(close);
@@ -456,14 +654,39 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
             S.adShowing = false;
             if (ad.offClose) ad.offClose(close);
             console.error("[playad] show ad failed", err);
-            setText(S.ui.tip, "\u5e7f\u544a\u6682\u4e0d\u53ef\u7528\uff0c\u8bf7\u7ee7\u7eed\u70b9\u51fb");
             if (reason === "complete" || reason === "api") complete();
             renderOnce();
         });
     }
 
+    function rebuildPanel() {
+        var wasVisible = S.visible;
+        var oldProgress = S.progress;
+        if (S.panel && S.panel.parent && S.panel.parent.removeChild) {
+            try { S.panel.parent.removeChild(S.panel); } catch (e) {}
+        }
+        try { S.panel && S.panel.destroy && S.panel.destroy({ children: true }); } catch (e) {}
+        S.panel = null;
+        S.ui = {};
+        if (ensurePanel()) {
+            S.panel.visible = wasVisible;
+            S.visible = wasVisible;
+            setProgress(oldProgress);
+            renderOnce();
+        }
+    }
+
+    function configureUI(opt) {
+        mergeConfig(UI_CONFIG, opt || {});
+        if (S.panel) rebuildPanel();
+        return api;
+    }
+
     function install(opt) {
-        if (opt) for (var k in opt) CFG[k] = opt[k];
+        if (opt) {
+            if (opt.ui) mergeConfig(UI_CONFIG, opt.ui);
+            for (var k in opt) if (k !== "ui") CFG[k] = opt[k];
+        }
         if (S.inited) return;
         S.inited = true;
         log("install");
@@ -489,9 +712,17 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
             if (S.progress >= CFG.max) onProgressFull("api");
             renderOnce();
         },
-        configure: function (opt) { if (opt) for (var k in opt) CFG[k] = opt[k]; return api; },
+        configure: function (opt) {
+            if (opt) {
+                if (opt.ui) configureUI(opt.ui);
+                for (var k in opt) if (k !== "ui") CFG[k] = opt[k];
+            }
+            return api;
+        },
+        configureUI: configureUI,
         _state: S,
-        _config: CFG
+        _config: CFG,
+        _uiConfig: UI_CONFIG
     };
 
     G.PlayAdPanel = api;
