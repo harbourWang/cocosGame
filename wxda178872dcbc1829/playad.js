@@ -193,6 +193,35 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
 
     function setText(t, v) { if (t) t.text = v; }
 
+    function stopTouchEvent(e) {
+        try { if (e && e.stopPropagation) e.stopPropagation(); } catch (err) {}
+        try { if (e && e.data && e.data.originalEvent && e.data.originalEvent.stopPropagation) e.data.originalEvent.stopPropagation(); } catch (err2) {}
+        try { if (e && e.data && e.data.originalEvent && e.data.originalEvent.preventDefault) e.data.originalEvent.preventDefault(); } catch (err3) {}
+        return false;
+    }
+
+    function createTouchBlocker(w, h) {
+        var g = new PIXI.Graphics();
+        g.name = "playad_touch_blocker";
+        // ????????????????????????????????????
+        g.beginFill(0x000000, 0.001);
+        g.drawRect(-w, -h, w * 3, h * 3);
+        g.drawRect(0, 0, w, h);
+        g.endFill();
+        g.interactive = true;
+        g.buttonMode = false;
+        try { if (PIXI.Rectangle) g.hitArea = new PIXI.Rectangle(0, 0, w, h); } catch (e) {}
+        var evs = [
+            "pointerdown", "pointermove", "pointerup", "pointerupoutside", "pointertap",
+            "touchstart", "touchmove", "touchend", "touchendoutside", "touchcancel", "tap",
+            "mousedown", "mousemove", "mouseup", "mouseupoutside", "click"
+        ];
+        if (g.on) {
+            for (var i = 0; i < evs.length; i++) g.on(evs[i], stopTouchEvent);
+        }
+        return g;
+    }
+
     function drawProgress() {
         if (!S.ui.fill || !S.ui.percent || !S.rect) return;
         var bw = S.rect.bw;
@@ -436,7 +465,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         var percentCfg = C.percent || {};
         var percent = makeText("0%", u(percentCfg.fontSize || 22), percentCfg.color == null ? 0x5a3200 : percentCfg.color, percentCfg.bold !== false);
         percent.y = S.rect.barY + S.rect.bh / 2 - percent.height / 2 + u(percentCfg.yOffset);
-        p.addChild(percent);
+        // p.addChild(percent);
 
         var btn = makeSprite(CFG.button);
         if (btn) {
@@ -452,8 +481,12 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         }
 
 
+        var touchBlocker = createTouchBlocker(w, h);
+        p.addChild(touchBlocker);
+
         S.panel = p;
         S.ui.mask = mask;
+        S.ui.touchBlocker = touchBlocker;
         S.ui.glow = glow;
         S.ui.barBg = barBg;
         S.ui.fill = fill;
