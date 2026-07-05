@@ -1,0 +1,20 @@
+{
+  "appid": "wxda178872dcbc1829",
+  "compileType": "game",
+  "libVersion": "3.15.2",
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "setting": {
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "editorSetting": {
+    "tabIndent": "auto",
+    "tabSize": 2
+  }
+}

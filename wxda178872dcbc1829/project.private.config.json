@@ -1,0 +1,145 @@
+{
+  "setting": {
+    "urlCheck": false
+  },
+  "condition": {
+    "game": {
+      "list": [
+        {
+          "name": "踩一踩",
+          "query": "scene=RFLUfkmRSbUv4XcLGIyg-Q",
+          "scene": 1001
+        },
+        {
+          "name": "彩虹猫",
+          "query": "scene=_NcfjGcmGyuSxZXnRxP6Cw",
+          "scene": null
+        },
+        {
+          "name": "98k",
+          "query": "scene=Ve9aXNxAsa1tJa2WtR_W6g",
+          "scene": null
+        },
+        {
+          "name": "粒子",
+          "query": "scene=jT2UwvJX5SMtITAPaZlgIw",
+          "scene": 1001
+        },
+        {
+          "name": "横版平台",
+          "query": "scene=V19kysXXuGIuSziy9hIvmw",
+          "scene": null
+        },
+        {
+          "name": "横屏详情打开版",
+          "query": "game_id=lbrnB-KOFsSU2sdtZ9dKsHrQ&detail=1",
+          "scene": 1001
+        },
+        {
+          "pathName": "",
+          "name": "逃命地球详情页",
+          "query": "game_id=HXxic72zQ7zpOtR2ylkJVA",
+          "scene": 1001
+        },
+        {
+          "pathName": "",
+          "name": "横屏排行榜测试",
+          "query": "scene=F946fFMazaqhNmgDwSdwjw",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "竖屏排行榜测试",
+          "query": "scene=DSNAEGG12UBS9fBXGOz7Vg",
+          "scene": null
+        },
+        {
+          "name": "反弹",
+          "query": "scene=RrMKBMh_Ux0pAzMHgNPsHA",
+          "scene": null
+        },
+        {
+          "name": "打砖块",
+          "query": "scene=Hbj7yb85L3dFXwpvjaza5w",
+          "scene": null
+        },
+        {
+          "name": "sss",
+          "query": "scene=r6Ltdjq7thBPGDTjSmNToQ",
+          "scene": null
+        },
+        {
+          "name": "234234",
+          "query": "scene=1_X857mfqFgukkv7wirzhUnQ",
+          "scene": null
+        },
+        {
+          "name": "234234",
+          "query": "scene=0Y0DnNpeU4ULwZ9GOg_ZRA",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "worldrank",
+          "query": "scene=7G-MzRiZKbcVNQ-00kMyXQ",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "姐妹淘",
+          "query": "scene=-JSiBOTI4f5JmXICrk1OVA",
+          "scene": null
+        },
+        {
+          "name": "debug",
+          "query": "scene=q6RxFfHlVAsLey4CstaXqA",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "worldrank1",
+          "query": "game_id=lbNWVmMGNlMDItMTM3YS00OTE5LThhMDgtOGVhN2RlNzM5MDI5",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "物理碰撞",
+          "query": "game_id=lbZDhhMWJjNmQtNzRmMS00YjhjLWFjZWMtMzYwNTJmNmI1NTll",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "wuli1",
+          "query": "game_id=lbZmNkNGVhYjUtYmUyOC00NjlkLWJkNGEtOGY3ZTQ0ZGQxN2I2",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "www",
+          "query": "game_id=lbYjhlOWY3OTUtMDA1Yi00NzAyLWFiMDItMzJlMDljYjIwNzhl",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "字体",
+          "query": "game_id=lbYjNmNDY5ZGItYTY2OC00MzBhLTkyMTktOWI1YWI3NjU1YjNj",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "游戏id，横屏",
+          "query": "scene=1_dVq_IBGL9GD-xwx7StWL5g",
+          "scene": null
+        },
+        {
+          "pathName": "",
+          "name": "朋友圈",
+          "query": "",
+          "scene": 1045
+        }
+      ]
+    }
+  },
+  "description": "项目私有配置文件。此文件中的内容将覆盖 project.config.json 中的相同字段。项目的改动优先同步到此文件中。详见文档：https://developers.weixin.qq.com/miniprogram/dev/devtools/projectconfig.html",
+  "projectname": "wxda178872dcbc1829"
+}

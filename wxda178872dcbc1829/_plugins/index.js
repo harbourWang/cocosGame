@@ -1,0 +1,13 @@
+Object.defineProperty(exports, "__esModule", {
+    value: !0
+}), exports.pluginSystemConfig = exports.pluginStore = void 0;
+
+var _config = _interopRequireDefault(require("./logic/config")), _config2 = _interopRequireDefault(require("./control/config")), _config3 = _interopRequireDefault(require("./motion/config")), _config4 = _interopRequireDefault(require("./operators/config")), _config5 = _interopRequireDefault(require("./sound/config")), _config6 = _interopRequireDefault(require("./looks/config")), _config7 = _interopRequireDefault(require("./animation/config")), _config8 = _interopRequireDefault(require("./sensing/config")), _config9 = _interopRequireDefault(require("./minigame/config")), _config10 = _interopRequireDefault(require("./data/config")), _config11 = _interopRequireDefault(require("./procedure/config")), _config12 = _interopRequireDefault(require("./joystick/config")), _config13 = _interopRequireDefault(require("./localstorage/config")), _config14 = _interopRequireDefault(require("./network/config")), _config15 = _interopRequireDefault(require("./worldrank/config")), _config16 = _interopRequireDefault(require("./userinfo/config")), _config17 = _interopRequireDefault(require("./particles/config")), _config18 = _interopRequireDefault(require("./button/config")), _config19 = _interopRequireDefault(require("./scrollview/config")), _config20 = _interopRequireDefault(require("./recorder/config")), _config21 = _interopRequireDefault(require("./videoview/config")), _config22 = _interopRequireDefault(require("./savephoto/config")), _config23 = _interopRequireDefault(require("./resourcemanage/config.js")), _config24 = _interopRequireDefault(require("./keyboard/config.js")), _config25 = _interopRequireDefault(require("./wechatrun/config"));
+
+function _interopRequireDefault(e) {
+    return e && e.__esModule ? e : {
+        default: e
+    };
+}
+
+var pluginSystemConfig = exports.pluginSystemConfig = [ _config.default, _config2.default, _config3.default, _config6.default, _config7.default, _config8.default, _config4.default, _config10.default, _config11.default, _config5.default, _config9.default ], pluginStore = exports.pluginStore = [ _config13.default, _config23.default, _config12.default, _config18.default, _config17.default, _config19.default, _config20.default, _config15.default, _config14.default, _config21.default, _config22.default, _config16.default, _config24.default, _config25.default ];

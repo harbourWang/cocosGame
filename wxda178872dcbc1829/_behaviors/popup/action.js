@@ -1,0 +1,12 @@
+Object.defineProperty(exports, "__esModule", {
+    value: !0
+}), exports.default = void 0;
+
+var _default = exports.default = {
+    popUp: {
+        msg: "弹出",
+        fun: function() {
+            this.start();
+        }
+    }
+};
