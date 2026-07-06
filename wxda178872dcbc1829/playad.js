@@ -21,20 +21,20 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
     var CFG = {
         bg: "img/adimg/tile_001.png",
         icon: "img/adimg/tile_004.png",
+        glow: "img/adimg/gqx.png",
         button: "img/adimg/tile_006.png",
         barBg: "img/adimg/tile_011.png",
         barFill: "img/adimg/tile_012.png",
-        adUnitId: "adunit-8cf11ddb3cc89440",              // 默认读取 GameGlobal._videoId；需要固定广告位可填这里
+        adUnitId: "adunit-8cf11ddb3cc89440",              // banner ad unit id
         autoShow: true,
         autoShowDelay: 800,
         max: 100,
         clickAdd: 14,
         decayPerSecond: 4,
-        slowNoClickMs: 3000,
-        slowMinSpeed: 6,
-        slowCheckMs: 4500,
         completeHideMs: 0,
-        playAdOnComplete: true
+        playAdOnComplete: true,
+        bannerShowProgress: 20,
+        bannerWidth: 300
     };
 
     // ================= UI CONFIG START =================
@@ -53,7 +53,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         title: { text: "\u72C2\u70B9\u6253\u5F00\u5B9D\u7BB1", x: 0, y: -70, fontSize: 41, color: 0xffffff, bold: true },
         progress: { w: 470, h: 43, fillH: 40, x: 0, y: 550, nineSlice: { left: 20, top: 12, right: 20, bottom: 12 } },
         percent: { yOffset: 0, fontSize: 22, color: 0x5a3200, bold: true },
-        button: { w: 322, h: 127, x: 0, y: 620 }
+        button: { w: 322, h: 127 }
     };
     // ================== UI CONFIG END ==================
 
@@ -85,8 +85,14 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         lastTickAt: 0,
         lastTapAt: 0,
         lastGlowAt: 0,
+        tapAnimId: 0,
         timer: null,
         autoTimer: null,
+        bannerShowing: false,
+        bannerResizeHandler: null,
+        bannerClickHandler: null,
+        wxHideHandler: null,
+        wxHideBinded: false,
         app: null,
         root: null,
         panel: null,
@@ -116,12 +122,19 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         try { return (W && W.getSystemInfoSync && W.getSystemInfoSync().pixelRatio) || 2; } catch (e) { return 2; }
     }
 
+    function getSystemInfo() {
+        try { return W && W.getSystemInfoSync ? W.getSystemInfoSync() : null; } catch (e) { return null; }
+    }
+
     function getSize(app) {
-        var sys;
-        try { sys = W && W.getSystemInfoSync ? W.getSystemInfoSync() : null; } catch (e) {}
+        var sys = getSystemInfo();
         var dpr = getDpr();
         var winW = ((sys && sys.windowWidth) || 375) * dpr;
         var winH = ((sys && sys.windowHeight) || 667) * dpr;
+        var safeBottom = 0;
+        if (sys && sys.safeArea && sys.safeArea.bottom && sys.windowHeight) {
+            safeBottom = Math.max(0, (sys.windowHeight - sys.safeArea.bottom) * dpr);
+        }
         var canvasW = 0, canvasH = 0;
         try {
             var c = (typeof canvas !== "undefined" && canvas) || G.canvas || (app && app.view);
@@ -136,7 +149,8 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
             w: Math.max(rendererW, canvasW, winW),
             h: Math.max(rendererH, canvasH, winH),
             sw: (sys && sys.windowWidth) || 375,
-            sh: (sys && sys.windowHeight) || 667
+            sh: (sys && sys.windowHeight) || 667,
+            safeBottom: safeBottom
         };
     }
 
@@ -193,6 +207,37 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
 
     function setText(t, v) { if (t) t.text = v; }
 
+    function setVisualScale(node, base, scale) {
+        if (!node || !base) return;
+        scale = Number(scale) || 1;
+        var w = base.w * scale;
+        var h = base.h * scale;
+        node.x = base.x + (base.w - w) / 2;
+        node.y = base.y + (base.h - h) / 2;
+        node.width = w;
+        node.height = h;
+    }
+
+    function playTapScale(done) {
+        var id = ++S.tapAnimId;
+        setVisualScale(S.ui.button, S.ui.buttonBase, 0.90);
+        setVisualScale(S.ui.chest, S.ui.chestBase, 0.90);
+        renderOnce();
+        setTimeout(function () {
+            if (id !== S.tapAnimId) return;
+            setVisualScale(S.ui.button, S.ui.buttonBase, 1.08);
+            setVisualScale(S.ui.chest, S.ui.chestBase, 1.08);
+            renderOnce();
+        }, 70);
+        setTimeout(function () {
+            if (id !== S.tapAnimId) return;
+            setVisualScale(S.ui.button, S.ui.buttonBase, 1);
+            setVisualScale(S.ui.chest, S.ui.chestBase, 1);
+            renderOnce();
+            if (done) done();
+        }, 140);
+    }
+
     function stopTouchEvent(e) {
         try { if (e && e.stopPropagation) e.stopPropagation(); } catch (err) {}
         try { if (e && e.data && e.data.originalEvent && e.data.originalEvent.stopPropagation) e.data.originalEvent.stopPropagation(); } catch (err2) {}
@@ -240,6 +285,9 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
     function setProgress(v) {
         S.progress = clamp(v);
         drawProgress();
+        if (S.visible && !S.completed && !S.adPlayed && !S.bannerShowing && S.progress > (Number(CFG.bannerShowProgress) || 35)) {
+            playAd("progress");
+        }
     }
 
     function ensurePanel() {
@@ -267,39 +315,25 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
     }
 
     function createGlow(radius) {
-        var c = new PIXI.Container();
-        c.name = "playad_chest_glow";
-        c.alpha = 0.95;
-
-        var circle1 = new PIXI.Graphics();
-        circle1.beginFill(0xfff1a6, 0.20);
-        circle1.drawCircle(0, 0, radius * 0.62);
-        circle1.endFill();
-        c.addChild(circle1);
-
-        var circle2 = new PIXI.Graphics();
-        circle2.beginFill(0xffffff, 0.16);
-        circle2.drawCircle(0, 0, radius * 0.38);
-        circle2.endFill();
-        c.addChild(circle2);
-
-        for (var i = 0; i < 16; i++) {
-            var ray = new PIXI.Graphics();
-            var longRay = i % 2 === 0;
-            var inner = radius * (longRay ? 0.26 : 0.22);
-            var outer = radius * (longRay ? 1.05 : 0.82);
-            var half = radius * (longRay ? 0.085 : 0.06);
-            ray.beginFill(0xfff6b8, longRay ? 0.42 : 0.28);
-            ray.moveTo(0, -inner);
-            ray.lineTo(half, -outer);
-            ray.lineTo(0, -outer * 1.12);
-            ray.lineTo(-half, -outer);
-            ray.lineTo(0, -inner);
-            ray.endFill();
-            ray.rotation = Math.PI * 2 * i / 16;
-            c.addChild(ray);
+        var wrap = new PIXI.Container();
+        var glow = makeSprite(CFG.glow);
+        var size = radius * 3.9;
+        if (!glow) return null;
+        wrap.name = "playad_chest_glow";
+        wrap.alpha = 0.92;
+        if (glow.anchor && glow.anchor.set) {
+            glow.anchor.set(0.5, 0.5);
+            glow.x = 0;
+            glow.y = 0;
+        } else {
+            glow.x = -size / 2;
+            glow.y = -size / 2;
         }
-        return c;
+        glow.width = size;
+        glow.height = size;
+        if (PIXI.BLEND_MODES && PIXI.BLEND_MODES.ADD != null) glow.blendMode = PIXI.BLEND_MODES.ADD;
+        wrap.addChild(glow);
+        return wrap;
     }
 
     function updateGlow() {
@@ -308,7 +342,10 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         if (!S.lastGlowAt) S.lastGlowAt = t;
         var dt = Math.min(0.08, Math.max(0, (t - S.lastGlowAt) / 1000));
         S.lastGlowAt = t;
-        S.ui.glow.rotation += dt * ((UI_CONFIG.glow && UI_CONFIG.glow.speed) || 1.8);
+        var speed = ((UI_CONFIG.glow && UI_CONFIG.glow.speed) || 1.8);
+        var glow = S.ui.glow;
+        glow.rotation += dt * speed * 0.45;
+        glow.alpha = 0.88 + Math.sin(t / 520) * 0.05;
     }
 
     function createPanel(app) {
@@ -317,10 +354,8 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         var C = UI_CONFIG;
         var sc = Number(C.scale) || 1;
         let temp = size.h / size.w
-        if(temp > 667/375) {
-            // sc = (temp - 1) * 0.5 + 1
-            sc = temp
-            // sc = 1.5
+        if(temp > 667 / 375) {
+            sc = temp  / (667 / 375);
             console.error("sc",sc)
         }
         console.error("sc",size)
@@ -354,8 +389,10 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
 
         var btnW = u(btnCfg.w || 322);
         var btnH = u(btnCfg.h || 127);
-        var btnX = centerX + u(btnCfg.x) - btnW / 2;
-        var btnY = groupTop + u(btnCfg.y || 406);
+        var btnX = w / 2 - btnW / 2;
+        var btnBottom = h * 0.07;
+        var btnY = h - btnH - btnBottom;
+        btnY = Math.max(0, Math.min(h - btnH, btnY));
 
         S.rect = {
             x: px,
@@ -421,6 +458,8 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
             icon.x = iconX;
             icon.y = iconY;
             p.addChild(icon);
+            S.ui.chest = icon;
+            S.ui.chestBase = { x: iconX, y: iconY, w: iconW, h: iconH };
         }
 
         var titleCfg = C.title || {};
@@ -474,10 +513,14 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
             btn.x = S.rect.btnX;
             btn.y = S.rect.btnY;
             p.addChild(btn);
+            S.ui.button = btn;
+            S.ui.buttonBase = { x: S.rect.btnX, y: S.rect.btnY, w: btnW, h: btnH };
         } else {
             var btn2 = new PIXI.Graphics();
             rr(btn2, 0xff7a00, 1, S.rect.btnX, S.rect.btnY, S.rect.btnW, S.rect.btnH, u(22));
             p.addChild(btn2);
+            S.ui.button = btn2;
+            S.ui.buttonBase = { x: S.rect.btnX, y: S.rect.btnY, w: btnW, h: btnH };
         }
 
 
@@ -531,10 +574,20 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         var t = now();
         if (!S.firstClickAt) S.firstClickAt = t;
         S.lastClickAt = t;
+        if (S.bannerShowing) {
+            playTapScale(function () {
+                hide();
+            });
+            renderOnce();
+            return;
+        }
         setProgress(S.progress + CFG.clickAdd);
         if (S.progress >= CFG.max) {
-            onProgressFull("complete");
+            playTapScale(function () {
+                onProgressFull("complete");
+            });
         } else {
+            playTapScale();
         }
         renderOnce();
     }
@@ -565,6 +618,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         S.visible = true;
         S.panel.visible = true;
         ensurePanel();
+        preloadBanner();
         startTick();
         renderOnce();
         log("panel show");
@@ -576,6 +630,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         S.lastGlowAt = 0;
         if (S.panel) S.panel.visible = false;
         stopTick();
+        hideBanner(false);
         renderOnce();
     }
 
@@ -584,6 +639,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         S.suspendPanel = true;
         S.lastGlowAt = 0;
         stopTick();
+        hideBanner(false);
         if (S.panel && S.panel.parent && S.panel.parent.removeChild) {
             try { S.panel.parent.removeChild(S.panel); } catch (e) {}
         }
@@ -604,14 +660,6 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
             S.lastTickAt = t;
             if (S.progress > 0) setProgress(S.progress - CFG.decayPerSecond * dt);
 
-            if (S.firstClickAt && !S.adPlayed) {
-                var inactive = t - S.lastClickAt;
-                var elapsed = t - S.firstClickAt;
-                var speed = elapsed > 0 ? S.progress / (elapsed / 1000) : 999;
-                if (inactive >= CFG.slowNoClickMs || (elapsed >= CFG.slowCheckMs && speed < CFG.slowMinSpeed)) {
-                    playAd("slow");
-                }
-            }
             renderOnce();
         }, 200);
     }
@@ -627,7 +675,6 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         if (CFG.playAdOnComplete !== false && !S.adPlayed) {
             renderOnce();
             playAd(reason || "complete");
-            return;
         }
         complete();
     }
@@ -639,19 +686,74 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
     }
 
     function getAdUnitId() {
-        return CFG.adUnitId || G._videoId || (typeof window !== "undefined" && window._videoId) || "";
+        return CFG.adUnitId || G._bannerId || G._videoId || (typeof window !== "undefined" && (window._bannerId || window._videoId)) || "";
+    }
+
+    function getBannerBottom(sys) {
+        return 0;
+    }
+
+    function getBannerStyle() {
+        var sys = getSystemInfo() || {};
+        var ww = sys.windowWidth || 375;
+        var wh = sys.windowHeight || 667;
+        var width = Math.min(Math.max(0, Number(CFG.bannerWidth) || 300), ww);
+        return {
+            left: Math.max(0, (ww - width) / 2),
+            top: Math.max(0, wh - 100 - getBannerBottom(sys)),
+            width: width
+        };
+    }
+
+    function positionBanner(ad, res) {
+        if (!ad || !ad.style) return;
+        var sys = getSystemInfo() || {};
+        var ww = sys.windowWidth || 375;
+        var wh = sys.windowHeight || 667;
+        var bw = res && res.width || ad.style.realWidth || ad.style.width || Number(CFG.bannerWidth) || 300;
+        var bh = res && res.height || ad.style.realHeight || 100;
+        ad.style.left = Math.max(0, (ww - bw) / 2);
+        ad.style.top = Math.max(0, wh - bh - getBannerBottom(sys));
+    }
+
+    function closeAfterBannerClick() {
+        if (!S.visible || !S.bannerShowing) return;
+        hide();
+    }
+
+    function bindBannerHideFallback() {
+        if (!W || !W.onHide || S.wxHideBinded) return;
+        S.wxHideBinded = true;
+        S.wxHideHandler = function () {
+            closeAfterBannerClick();
+        };
+        W.onHide(S.wxHideHandler);
     }
 
     function getAd() {
         if (S.ad) return S.ad;
         var id = getAdUnitId();
-        if (!W || !W.createRewardedVideoAd || !id) return null;
+        if (!W || !W.createBannerAd || !id) return null;
         try {
-            S.ad = W.createRewardedVideoAd({ adUnitId: id });
-            S.ad.onError(function (err) {
-                S.adShowing = false;
-                console.error("[playad] ad error", err);
+            S.ad = W.createBannerAd({
+                adUnitId: id,
+                style: getBannerStyle()
             });
+            S.bannerResizeHandler = function (res) {
+                positionBanner(S.ad, res);
+            };
+            if (S.ad.onResize) S.ad.onResize(S.bannerResizeHandler);
+            if (S.ad.onError) {
+                S.ad.onError(function (err) {
+                    S.bannerShowing = false;
+                    console.error("[playad] ad error", err);
+                });
+            }
+            S.bannerClickHandler = function () {
+                closeAfterBannerClick();
+            };
+            if (S.ad.onClick) S.ad.onClick(S.bannerClickHandler);
+            bindBannerHideFallback();
             return S.ad;
         } catch (e) {
             console.error("[playad] create ad failed", e);
@@ -659,36 +761,50 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         }
     }
 
+    function hideBanner(destroy) {
+        S.bannerShowing = false;
+        if (!S.ad) return;
+        try { if (S.ad.hide) S.ad.hide(); } catch (e) {}
+        if (destroy) {
+            try { if (S.ad.offResize && S.bannerResizeHandler) S.ad.offResize(S.bannerResizeHandler); } catch (e2) {}
+            try { if (S.ad.offClick && S.bannerClickHandler) S.ad.offClick(S.bannerClickHandler); } catch (e3) {}
+            try { if (S.ad.destroy) S.ad.destroy(); } catch (e4) {}
+            S.ad = null;
+            S.bannerResizeHandler = null;
+            S.bannerClickHandler = null;
+        }
+    }
+
+    function preloadBanner() {
+        var ad = getAd();
+        if (!ad) return;
+        positionBanner(ad);
+        try { if (ad.hide) ad.hide(); } catch (e) {}
+        S.bannerShowing = false;
+    }
+
     function playAd(reason) {
-        if (S.adShowing || S.adPlayed || S.completed) return;
+        if (S.adShowing || S.completed) return;
         S.adPlayed = true;
-        destroyPanelForAd();
         var ad = getAd();
         if (!ad) {
             log("no ad, skip", reason);
             S.lastClickAt = now();
-            if (reason === "complete" || reason === "api") complete();
             return;
         }
-        S.adShowing = true;
-        var close = function (res) {
-            S.adShowing = false;
-            if (ad.offClose) ad.offClose(close);
-            setProgress(CFG.max);
-            complete();
-            renderOnce();
-        };
-        ad.onClose(close);
         Promise.resolve().then(function () {
-            return ad.load ? ad.load() : null;
-        }).then(function () {
+            if (!S.visible || S.completed) return null;
+            positionBanner(ad);
             return ad.show();
+        }).then(function () {
+            if (S.visible && !S.completed) {
+                S.bannerShowing = true;
+            } else {
+                try { if (ad.hide) ad.hide(); } catch (e) {}
+            }
         }).catch(function (err) {
-            S.adShowing = false;
-            if (ad.offClose) ad.offClose(close);
-            console.error("[playad] show ad failed", err);
-            if (reason === "complete" || reason === "api") complete();
-            renderOnce();
+            S.bannerShowing = false;
+            console.error("[playad] show banner failed", err);
         });
     }
 
