@@ -29,11 +29,12 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         autoShow: true,
         autoShowDelay: 800,
         max: 100,
-        clickAdd: 14,
-        decayPerSecond: 4,
+        clickAdd: 9,
+        decayPerSecond: 25,
         completeHideMs: 0,
         playAdOnComplete: true,
-        bannerShowProgress: 20,
+        bannerShowProgress: 42,
+        bannerHideIdleMs: 500,
         bannerWidth: 300
     };
 
@@ -634,6 +635,14 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
         renderOnce();
     }
 
+    function updateBannerIdle(t) {
+        var idleMs = Math.max(0, Number(CFG.bannerHideIdleMs) || 0);
+        if (!S.bannerShowing || !idleMs || !S.lastClickAt) return;
+        if (t - S.lastClickAt < idleMs) return;
+        hideBanner(false);
+        S.adPlayed = false;
+    }
+
     function destroyPanelForAd() {
         S.visible = false;
         S.suspendPanel = true;
@@ -659,7 +668,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
             var dt = Math.max(0, t - S.lastTickAt) / 1000;
             S.lastTickAt = t;
             if (S.progress > 0) setProgress(S.progress - CFG.decayPerSecond * dt);
-
+            updateBannerIdle(t);
             renderOnce();
         }, 200);
     }
@@ -786,6 +795,7 @@ try { if (typeof GameGlobal !== "undefined") GameGlobal.__PLAYAD_FILE_EXECUTED__
     function playAd(reason) {
         if (S.adShowing || S.completed) return;
         S.adPlayed = true;
+        if (!S.lastClickAt) S.lastClickAt = now();
         var ad = getAd();
         if (!ad) {
             log("no ad, skip", reason);

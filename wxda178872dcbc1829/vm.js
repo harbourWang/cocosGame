@@ -134,7 +134,7 @@ function canShowAd() {
       1045, 1046, 1067, 1084, 1095, 1079,
     1189, 1200, 1201, 1215, 1079, 1206, 1184, 1272, 1233,
     1228, 1230, 1232, 1238, 1274, 1295,
-      1001,1089//测试scene
+    //   1001,1089//测试scene
   ];
   // 在游戏入口文件 game.js 中整合
   const launchOptions = wx.getLaunchOptionsSync();
@@ -145,7 +145,7 @@ function canShowAd() {
   if (numbers.indexOf(scene) != -1) {
       return true
   }
-  // return true
+//   return true
   return false
 }
 
