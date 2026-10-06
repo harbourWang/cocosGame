@@ -7745,7 +7745,7 @@ var SpriteEvent$1 = function(t, e) {
           this.sprites.forEach(function(t) {
               t.bindHats();
           }), this.backgroundColor && (this.app.renderer.backgroundColor = parseInt(this.backgroundColor, 16)), 
-          this.renderer.map.visible = !0, this.renderer.camera.visible = !0, this.app.rankInit(this.vm.runtimeData), 
+          this.renderer.map.visible = !0, this.renderer.camera.visible = !0,
           this.app.collisionManager.loadColliders(unique(this.vm.runtimeData.collision_pairs[this.id])), 
           "template" !== this.type && (t || this.eventEmitter.emit(OPCODE.eventSwitchScene, {
               OPTION_LIST: this.id
@@ -9606,10 +9606,10 @@ var MINI_POINTS_OF_COLLISION = 1, CollisionManager = function() {
   }, {
       key: "preFriendRank",
       value: function() {
-          this.friendRankShow || (this.openDataContext.postMessage({
+          this.openDataContext && (this.friendRankShow || (this.openDataContext.postMessage({
               postType: postTypeMap.friendRank,
               gameid: this.gameid
-          }), this.friendRankShow = !0);
+          }), this.friendRankShow = !0));
       }
   }, {
       key: "renderWorldRank",
@@ -9742,8 +9742,8 @@ var MINI_POINTS_OF_COLLISION = 1, CollisionManager = function() {
   }, {
       key: "showRank",
       value: function() {
-          isMiniGame ? (mta && mta.Event.stat("home_click_to_show_rank", {}), "lbZmVkMWYwYTYtNjliMy00MGY5LTkwYWItZjJhZmQzNGU2YWE4" === this.gameid && window.GameGlobal ? (this.worldRankVisible = !0, 
-          this.renderWorldRank(), window.GameGlobal.gettoprank(96750, this.renderWorldRank.bind(this))) : this.preFriendRank()) : this.ideSubContext.renderRankTips("排行榜组件请在手机端预览");
+          isMiniGame ? this.openDataContext && (mta && mta.Event.stat("home_click_to_show_rank", {}), "lbZmVkMWYwYTYtNjliMy00MGY5LTkwYWItZjJhZmQzNGU2YWE4" === this.gameid && window.GameGlobal ? (this.worldRankVisible = !0,
+          this.renderWorldRank(), window.GameGlobal.gettoprank(96750, this.renderWorldRank.bind(this))) : this.preFriendRank()) : this.ideSubContext && this.ideSubContext.renderRankTips("排行榜组件请在手机端预览");
       }
   }, {
       key: "setRankTitle",
@@ -11988,8 +11988,8 @@ function(t) {
       }
   }, {
       key: "rankInit",
-      value: function(t) {
-          this.hasRank = !0, subContext.init(this, t.config), (t = this.runtimeData && this.runtimeData.getBlockFeildsValue("looks_rankperiod")) && subContext.setRankPeriod(t.OPTION_LIST.value);
+      value: function() {
+          this.hasRank = !1;
       }
   }, {
       key: "pauseGame",
