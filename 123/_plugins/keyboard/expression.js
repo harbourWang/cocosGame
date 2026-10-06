@@ -1,0 +1,14 @@
+Object.defineProperty(exports, "__esModule", {
+    value: !0
+}), exports.default = void 0;
+
+var _default = {
+    keyboardValue: {
+        msg: "键盘的值",
+        fun: function() {
+            return this._keyboardValue;
+        }
+    }
+};
+
+exports.default = _default;
